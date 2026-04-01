@@ -42,7 +42,7 @@ class Pixel_Segment:
         
 
 
-source_lut  = 'pixel_verde.csv'
-source = 'images/bitbots_reality_spl_only_131-16_02_2018__11_18_08_0117_upper_png_jpg_b0.8_s1.0_k0.jpg'
+source_lut  = 'Segmentation_for_robocup-main/pixel_verde.csv'
+source = 'Segmentation_for_robocup-main/images/bitbots_reality_spl_only_131-16_02_2018__11_18_08_0117_upper_png_jpg_b0.8_s1.0_k0.jpg'
 obj = Pixel_Segment(source,source_lut)
 obj.run()

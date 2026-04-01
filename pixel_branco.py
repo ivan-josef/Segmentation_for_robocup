@@ -4,12 +4,12 @@ import io
 
 # Simulando a leitura do seu arquivo CSV
 # Na prática, você usaria: df = pd.read_csv("seus_valores_hsv.csv")
-csv_data = "pixel_verde.csv"
+csv_data = "Segmentation_for_robocup-main/pixel_branco.csv"
 
 df = pd.read_csv(csv_data)
 
 # Filtrar apenas a classe 'branco' (caso sua tabela tenha outras cores no futuro)
-df_branco = df[df['class'] == 'verde']
+df_branco = df[df['class'] == 'branco']
 
 # Calcular Média e Desvio Padrão
 medias = df_branco[['H', 'S', 'V']].mean()
