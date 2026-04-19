@@ -10,7 +10,15 @@ class Pixel_Segment:
 
         self.load_image()
         self.grid_height = int(self.height / 8)
-        self.grid_widht = int(self.width / 8)
+        self.grid_width = int(self.width / 8)
+
+        self.tpix = 20
+        self.trow = 10000
+        self.twin = 3000
+
+        self.histogram = []
+        
+
 
     def load_image(self):
         self.img = cv2.imread(self.path)
@@ -19,32 +27,64 @@ class Pixel_Segment:
         self.height, self.width, self.channels = self.img.shape
 
     def masks_and_resize(self):
-        self.lower = branco.lower
-        self.up = branco.up
-        self.white_mask = cv2.inRange(self.img_hsv, self.lower, self.up)
+        #white mask
+        lower = branco.lower
+        up = branco.up
+
+        self.white_mask = cv2.inRange(self.img_hsv, lower, up)
+
+        #green mask
+        self.lut_verde = np.zeros((180,256,256),dtype=np.uint8)
+        h_vals = self.lut_csv['H'].values.astype(int)
+        s_vals = self.lut_csv['S'].values.astype(int)
+        v_vals = self.lut_csv['V'].values.astype(int)
+
+        self.lut_verde[h_vals,s_vals,v_vals] = 255
         self.green_mask = self.lut_verde[self.h_img,self.s_img,self.v_img]
 
-        self.white_mask_resized = cv2.resize(self.white_mask,(self.grid_height,self.grid_widht))
-        self.green_mask_resized = cv2.resize(self.green_mask,(self.grid_height,self.grid_widht))
+        #masks resize
+        self.white_mask_resized = cv2.resize(self.white_mask,(self.grid_width,self.grid_height),interpolation=cv2.INTER_AREA).astype(np.float32)
+        self.green_mask_resized = cv2.resize(self.green_mask,(self.grid_width,self.grid_height),interpolation=cv2.INTER_AREA).astype(np.float32)
 
+    def binarization(self):
+        uniq_img_cal = (self.white_mask_resized * 0.5) + (self.green_mask_resized * 1.0)
+        uniq_img_cal = np.clip(uniq_img_cal,0,255)
+        uniq_img = uniq_img_cal.astype(np.uint8) 
 
-    def np_lut(self):
-        self.lut_verde = np.zeros((180,256,256),dtype=np.uint8)
-        self.h_vals = self.lut_csv['H'].values.astype(int)
-        self.s_vals = self.lut_csv['S'].values.astype(int)
-        self.v_vals = self.lut_csv['V'].values.astype(int)
+        # soma de valores da mesma linha 
+        soma_por_linha = np.sum(uniq_img, axis=1)
+        row_sums_1d = soma_por_linha + np.roll(soma_por_linha, 1)
+        row_sums_1d[0] = soma_por_linha[0]  
+        matriz_row_sum = np.broadcast_to(row_sums_1d.reshape(self.grid_height, 1), (self.grid_height, self.grid_width))
 
-        self.lut_verde[self.h_vals,self.s_vals,self.v_vals] = 255
+        # soma da janela
+        kernel_8x4 = np.ones((4, 8), dtype=np.float32)
+        matriz_window_sum = cv2.filter2D(uniq_img.astype(np.float32), -1, kernel_8x4, anchor=(4, 0))  
+
+        passou_no_pix  = uniq_img >= self.tpix
+        passou_no_row = matriz_row_sum >= self.trow
+        passou_na_win = matriz_window_sum >= self.twin
+
+        self.borda_binaria = (passou_no_pix & (passou_no_row | passou_na_win)).astype(np.uint8) * 255
+        
+        # histograma
+        lines = len(self.borda_binaria)
+        colums = len(self.borda_binaria[0])
+        count = 79
+
+        self.mascara_tamanho_original = cv2.resize(
+            self.borda_binaria, 
+            (self.width, self.height), 
+            interpolation=cv2.INTER_NEAREST
+        ) 
+         
 
     def run(self):
-        self.load_image()
-        self.np_lut()
         self.masks_and_resize()
-        cv2.imshow('imagem',self.img)
-        print(self.height,self.width)
-        cv2.imshow('white_mask',self.white_mask_resized)
-        cv2.imshow('green_mask',self.green_mask_resized)
+        self.binarization()
 
+        cv2.imshow('imagem',self.img)
+        cv2.imshow('white_mask',self.mascara_tamanho_original)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
         
