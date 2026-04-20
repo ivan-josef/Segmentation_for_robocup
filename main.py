@@ -3,6 +3,9 @@ import numpy as np
 import pandas as pd 
 import def_white_threshold as branco
 
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import medfilt
+
 class Pixel_Segment:
     def __init__(self,path,lut_csv):
         self.path = path 
@@ -17,8 +20,6 @@ class Pixel_Segment:
         self.twin = 3000
 
         self.histogram = []
-        
-
 
     def load_image(self):
         self.img = cv2.imread(self.path)
@@ -47,6 +48,7 @@ class Pixel_Segment:
         self.green_mask_resized = cv2.resize(self.green_mask,(self.grid_width,self.grid_height),interpolation=cv2.INTER_AREA).astype(np.float32)
 
     def binarization(self):
+        #fundindo as imagens de cor 
         uniq_img_cal = (self.white_mask_resized * 0.5) + (self.green_mask_resized * 1.0)
         uniq_img_cal = np.clip(uniq_img_cal,0,255)
         uniq_img = uniq_img_cal.astype(np.uint8) 
@@ -61,6 +63,7 @@ class Pixel_Segment:
         kernel_8x4 = np.ones((4, 8), dtype=np.float32)
         matriz_window_sum = cv2.filter2D(uniq_img.astype(np.float32), -1, kernel_8x4, anchor=(4, 0))  
 
+        #operação de binarização
         passou_no_pix  = uniq_img >= self.tpix
         passou_no_row = matriz_row_sum >= self.trow
         passou_na_win = matriz_window_sum >= self.twin
@@ -70,13 +73,55 @@ class Pixel_Segment:
         # histograma
         lines = len(self.borda_binaria)
         colums = len(self.borda_binaria[0])
-        count = 79
+
+
+        for col in range(colums):
+            zero_count = 0
+            last_one = lines -1
+            for line in range(lines -1,-1,-1):
+                if  self.borda_binaria[line][col] == 255:
+                    zero_count = 0
+                    last_one = line 
+                else:
+                    zero_count+=1
+                if zero_count >= 4:
+                    break
+            self.histogram.append([last_one,col])
+        print(self.histogram)
+        
+
+        #filtragem e convexhull
+        y_vals = np.array([item[0] for item in self.histogram], dtype=np.float32)
+        y_median = medfilt(y_vals, kernel_size=3)
+        y_gauss = gaussian_filter1d(y_median, sigma=1.0)
+        contour_points = []
+
+
+        for x in range(self.grid_width):
+            suavized_y = int(np.clip(y_gauss[x], 0, self.grid_height - 1))
+            contour_points.append([x, suavized_y])
+
+        # Adicionar os cantos inferiores para fechar o polígono do campo
+        contour_points.append([self.grid_width - 1, self.grid_height - 1]) 
+        contour_points.append([0, self.grid_height - 1])                   
+
+        # Converter para o formato (N, 1, 2) int32 do OpenCV
+        pontos_np = np.array(contour_points, dtype=np.int32).reshape((-1, 1, 2))
+
+        # Calcular o Casco Convexo sobre a borda suavizada
+        hull = cv2.convexHull(pontos_np)
+
+        # Criar a máscara convexa final
+        self.mascara_convexa = np.zeros((self.grid_height, self.grid_width), dtype=np.uint8)
+        cv2.drawContours(self.mascara_convexa, [hull], -1, 255, thickness=cv2.FILLED)
+            
 
         self.mascara_tamanho_original = cv2.resize(
-            self.borda_binaria, 
+            self.mascara_convexa, 
             (self.width, self.height), 
             interpolation=cv2.INTER_NEAREST
         ) 
+        self.visao_recortada = cv2.bitwise_and(self.img, self.img, mask=self.mascara_tamanho_original)
          
 
     def run(self):
@@ -84,7 +129,7 @@ class Pixel_Segment:
         self.binarization()
 
         cv2.imshow('imagem',self.img)
-        cv2.imshow('white_mask',self.mascara_tamanho_original)
+        cv2.imshow('white_mask',self.visao_recortada)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
         

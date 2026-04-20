@@ -1,18 +1,57 @@
+import cv2 
+import numpy as np
+
 matriz = [
-    [1, 2, 3],
-    [4, 5, 6],
-    [7, 8, 9]
+    [0, 0, 0,0,0,0,0, 0, 0,0,0,0,0, 0, 0,0,0,0,0,0],
+    [0, 0, 0,0,0,0,0, 0, 0,0,0,0,0, 0, 0,0,0,0,0,0],
+    [0, 0, 0,0,0,0,0, 0, 0,0,0,0,0, 0, 0,0,0,0,0,0],
+    [0, 0, 0,0,0,0,0, 0, 0,0,0,0,0, 0, 0,0,0,0,0,0],
+    [0, 1, 0,0,0,0,0, 1, 0,1,1,1,0, 0, 0,1,0,0,0,1],
+    [1, 0, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,1],
+    [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,1],
+    [0, 1, 1,1,1,1,1, 0, 1,1,1,1,1, 1, 1,1,1,1,1,0],
+    [0, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,1],
+    [1, 1, 1,1,1,1,1, 0, 1,1,1,1,1, 1, 1,1,1,0,1,1],
+    [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,0,1,1],
+    [1, 1, 1,1,1,1,1, 0, 1,1,1,0,1, 1, 1,1,1,1,1,1],
+    [1, 1, 1,1,1,1,1, 0, 1,1,1,0,1, 1, 1,1,1,0,1,0],
+    [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,1],
+    [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,1],
+    [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,0,1,1],
+    [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,0],
+    [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,1],
+    [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,1],
+    [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,1],
 ]
 
 linhas = len(matriz)
 colunas = len(matriz[0])
-x = linhas - 1
-y = 0
 
 
-for linha in range(linhas):
-    for coluna in range(colunas):
-        print(matriz[x][y])
-        x-=1
-    x = linhas - 1
-    y+=1
+histograma = []
+
+
+
+for coluna in range(colunas):
+    ultimo_um = linhas - 1
+    zeros_consec = 0
+    for linha in range(linhas -1,-1,-1):
+        if matriz[linha][coluna] == 1:
+            zeros_consec = 0
+            ultimo_um = linha
+        else:
+            zeros_consec+=1
+        if zeros_consec >= 4:
+            break
+    
+    histograma.append([ultimo_um,coluna])
+
+np_img = np.zeros((linhas,colunas),np.uint8)
+for p in histograma:
+    np_img[p[0],p[1]] = 255
+
+img = (np.array(histograma) * 255).astype(np.uint8)
+cv2.imshow('matriz',cv2.resize(np_img   ,(640,640),cv2.INTER_NEAREST))
+#cv2.imshow('matriz',img)
+cv2.waitKey(0) 
+cv2.destroyAllWindows()
