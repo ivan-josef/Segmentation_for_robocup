@@ -1,5 +1,6 @@
 import cv2 
 import numpy as np
+import random
 
 matriz = [
     [0, 0, 0,0,0,0,0, 0, 0,0,0,0,0, 0, 0,0,0,0,0,0],
@@ -24,34 +25,32 @@ matriz = [
     [1, 1, 1,1,1,1,1, 1, 1,1,1,1,1, 1, 1,1,1,1,1,1],
 ]
 
-linhas = len(matriz)
-colunas = len(matriz[0])
+matriz_aleatoria = [
+    [random.randint(0, 255) for _ in linha]
+    for linha in matriz
+]
 
 
-histograma = []
+vizinho_cima = np.roll(matriz_aleatoria,1,axis=0)
+passou_cima = vizinho_cima >= matriz_aleatoria
+vizinho_baixo = np.roll(matriz_aleatoria,-1,axis=0)
+passou_baixo = vizinho_baixo >= matriz_aleatoria
+vizinho_direita = np.roll(matriz_aleatoria,-1,axis=1)
+passou_direita = vizinho_direita >= matriz_aleatoria
+vizinho_esquerda = np.roll(matriz_aleatoria,1,axis=1)
+passou_esquerda = vizinho_esquerda >= matriz_aleatoria
+vizinho_dig_sup_dir = np.roll(matriz_aleatoria,(1,-1),axis=(0,1))
+passou_dig_sup_dir = vizinho_dig_sup_dir >= matriz_aleatoria
+vizinho_dig_inf_dir = np.roll(matriz_aleatoria,(-1,-1),axis=(0,1))
+passou_dig_inf_dir = vizinho_dig_inf_dir >= matriz_aleatoria
+vizinho_dig_sup_esq = np.roll(matriz_aleatoria,(1,1),axis=(0,1))
+passou_dig_sup_esq = vizinho_dig_sup_esq >= matriz_aleatoria
+viziho_dig_inf_esq = np.roll(matriz_aleatoria,(-1,1),axis=(0,1))
+passou_dig_inf_esq = viziho_dig_inf_esq >= matriz_aleatoria
+
+c_xy = (passou_cima + passou_baixo + passou_direita + passou_esquerda + passou_dig_sup_dir + passou_dig_inf_dir + passou_dig_sup_esq + passou_dig_inf_esq).astype(np.uint8)
+
+print(c_xy)
 
 
 
-for coluna in range(colunas):
-    ultimo_um = linhas - 1
-    zeros_consec = 0
-    for linha in range(linhas -1,-1,-1):
-        if matriz[linha][coluna] == 1:
-            zeros_consec = 0
-            ultimo_um = linha
-        else:
-            zeros_consec+=1
-        if zeros_consec >= 4:
-            break
-    
-    histograma.append([ultimo_um,coluna])
-
-np_img = np.zeros((linhas,colunas),np.uint8)
-for p in histograma:
-    np_img[p[0],p[1]] = 255
-
-img = (np.array(histograma) * 255).astype(np.uint8)
-cv2.imshow('matriz',cv2.resize(np_img   ,(640,640),cv2.INTER_NEAREST))
-#cv2.imshow('matriz',img)
-cv2.waitKey(0) 
-cv2.destroyAllWindows()

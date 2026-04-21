@@ -87,7 +87,6 @@ class Pixel_Segment:
                 if zero_count >= 4:
                     break
             self.histogram.append([last_one,col])
-        print(self.histogram)
         
 
         #filtragem e convexhull
@@ -124,20 +123,65 @@ class Pixel_Segment:
         ) 
         self.visao_recortada = cv2.bitwise_and(self.img, self.img, mask=self.mascara_tamanho_original)
 
-    def skeletonization(self):
+    def skeletonization_and_connect(self):
 
+
+        #skeletização
         self.field_line_mask = cv2.bitwise_and(self.white_mask,self.mascara_tamanho_original)
-        self.field_line_mask = cv2.GaussianBlur(self.field_line_mask,(21,21),0)
+        kernel_tampa_buraco = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        self.mask_maciça = cv2.morphologyEx(self.field_line_mask, cv2.MORPH_CLOSE, kernel_tampa_buraco)
+        self.mascara_relevo = cv2.GaussianBlur(self.field_line_mask,(31,31),0)
+
+
         
-         
+        vizinho_cima = np.roll( self.mascara_relevo,1,axis=0)
+        passou_cima = vizinho_cima >= self.mascara_relevo
+        vizinho_baixo = np.roll(self.mascara_relevo,-1,axis=0)
+        passou_baixo = vizinho_baixo >= self.mascara_relevo
+        vizinho_direita = np.roll(self.mascara_relevo,-1,axis=1)
+        passou_direita = vizinho_direita >= self.mascara_relevo
+        vizinho_esquerda = np.roll(self.mascara_relevo,1,axis=1)
+        passou_esquerda = vizinho_esquerda >= self.mascara_relevo
+        vizinho_dig_sup_dir = np.roll(self.mascara_relevo,(1,-1),axis=(0,1))
+        passou_dig_sup_dir = vizinho_dig_sup_dir >= self.mascara_relevo
+        vizinho_dig_inf_dir = np.roll(self.mascara_relevo,(-1,-1),axis=(0,1))
+        passou_dig_inf_dir = vizinho_dig_inf_dir >= self.mascara_relevo
+        vizinho_dig_sup_esq = np.roll(self.mascara_relevo,(1,1),axis=(0,1))
+        passou_dig_sup_esq = vizinho_dig_sup_esq >= self.mascara_relevo
+        viziho_dig_inf_esq = np.roll(self.mascara_relevo,(-1,1),axis=(0,1))
+        passou_dig_inf_esq = viziho_dig_inf_esq >= self.mascara_relevo
+        
+        c_xy = np.sum([
+            passou_cima, 
+            passou_baixo, 
+            passou_direita, 
+            passou_esquerda, 
+            passou_dig_sup_dir, 
+            passou_dig_inf_dir, 
+            passou_dig_sup_esq, 
+            passou_dig_inf_esq
+        ], axis=0, dtype=np.uint8)
+
+        nao_e_fundo = self.mascara_relevo > 0
+        e_cume_montanha = c_xy < 3 
+        skeleton = nao_e_fundo & e_cume_montanha
+        self.skeleton_img = np.where(skeleton,255,0).astype(np.uint8)
+
+    
+        
+
+
+    def debug(self):
+        pass
+
 
     def run(self):
         self.masks_and_resize()
         self.binarization()
-        self.skeletonization()
+        self.skeletonization_and_connect()
 
-        cv2.imshow('imagem',self.img)
-        cv2.imshow('white_mask',self.field_line_mask)
+        cv2.imshow('mascara maciça',self.mascara_relevo)
+        cv2.imshow('resultado da janela 3x3',self.skeleton_img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
         
