@@ -116,20 +116,28 @@ class Pixel_Segment:
         cv2.drawContours(self.mascara_convexa, [hull], -1, 255, thickness=cv2.FILLED)
             
 
+        #redimensionamento
         self.mascara_tamanho_original = cv2.resize(
             self.mascara_convexa, 
             (self.width, self.height), 
             interpolation=cv2.INTER_NEAREST
         ) 
         self.visao_recortada = cv2.bitwise_and(self.img, self.img, mask=self.mascara_tamanho_original)
+
+    def skeletonization(self):
+
+        self.field_line_mask = cv2.bitwise_and(self.white_mask,self.mascara_tamanho_original)
+        self.field_line_mask = cv2.GaussianBlur(self.field_line_mask,(21,21),0)
+        
          
 
     def run(self):
         self.masks_and_resize()
         self.binarization()
+        self.skeletonization()
 
         cv2.imshow('imagem',self.img)
-        cv2.imshow('white_mask',self.visao_recortada)
+        cv2.imshow('white_mask',self.field_line_mask)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
         
