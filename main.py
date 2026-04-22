@@ -23,9 +23,9 @@ class Pixel_Segment:
 
     def load_image(self):
         self.img = cv2.imread(self.path)
+        self.height, self.width, self.channels = self.img.shape
         self.img_hsv = cv2.cvtColor(self.img, cv2.COLOR_BGR2HSV)
         self.h_img, self.s_img, self.v_img = cv2.split(self.img_hsv)
-        self.height, self.width, self.channels = self.img.shape
 
     def masks_and_resize(self):
         #white mask
@@ -51,20 +51,20 @@ class Pixel_Segment:
         #fundindo as imagens de cor 
         uniq_img_cal = (self.white_mask_resized * 0.5) + (self.green_mask_resized * 1.0)
         uniq_img_cal = np.clip(uniq_img_cal,0,255)
-        uniq_img = uniq_img_cal.astype(np.uint8) 
+        self.uniq_img = uniq_img_cal.astype(np.uint8) 
 
         # soma de valores da mesma linha 
-        soma_por_linha = np.sum(uniq_img, axis=1)
+        soma_por_linha = np.sum(self.uniq_img, axis=1)
         row_sums_1d = soma_por_linha + np.roll(soma_por_linha, 1)
         row_sums_1d[0] = soma_por_linha[0]  
         matriz_row_sum = np.broadcast_to(row_sums_1d.reshape(self.grid_height, 1), (self.grid_height, self.grid_width))
 
         # soma da janela
         kernel_8x4 = np.ones((4, 8), dtype=np.float32)
-        matriz_window_sum = cv2.filter2D(uniq_img.astype(np.float32), -1, kernel_8x4, anchor=(4, 0))  
+        matriz_window_sum = cv2.filter2D(self.uniq_img.astype(np.float32), -1, kernel_8x4, anchor=(4, 0))  
 
         #operação de binarização
-        passou_no_pix  = uniq_img >= self.tpix
+        passou_no_pix  = self.uniq_img >= self.tpix
         passou_no_row = matriz_row_sum >= self.trow
         passou_na_win = matriz_window_sum >= self.twin
 
@@ -92,12 +92,12 @@ class Pixel_Segment:
         #filtragem e convexhull
         y_vals = np.array([item[0] for item in self.histogram], dtype=np.float32)
         y_median = medfilt(y_vals, kernel_size=3)
-        y_gauss = gaussian_filter1d(y_median, sigma=1.0)
+        self.y_gauss = gaussian_filter1d(y_median, sigma=1.0)
         contour_points = []
 
 
         for x in range(self.grid_width):
-            suavized_y = int(np.clip(y_gauss[x], 0, self.grid_height - 1))
+            suavized_y = int(np.clip(self.y_gauss[x], 0, self.grid_height - 1))
             contour_points.append([x, suavized_y])
 
         # Adicionar os cantos inferiores para fechar o polígono do campo
@@ -108,28 +108,26 @@ class Pixel_Segment:
         pontos_np = np.array(contour_points, dtype=np.int32).reshape((-1, 1, 2))
 
         # Calcular o Casco Convexo sobre a borda suavizada
-        hull = cv2.convexHull(pontos_np)
+        self.hull = cv2.convexHull(pontos_np)
 
         # Criar a máscara convexa final
         self.mascara_convexa = np.zeros((self.grid_height, self.grid_width), dtype=np.uint8)
-        cv2.drawContours(self.mascara_convexa, [hull], -1, 255, thickness=cv2.FILLED)
+        cv2.drawContours(self.mascara_convexa, [self.hull], -1, 255, thickness=cv2.FILLED)
             
 
-        #redimensionamento
+    
+    def skeletonization_and_connect(self):
+
+
+        #skeletização
+
         self.mascara_tamanho_original = cv2.resize(
             self.mascara_convexa, 
             (self.width, self.height), 
             interpolation=cv2.INTER_NEAREST
         ) 
-        self.visao_recortada = cv2.bitwise_and(self.img, self.img, mask=self.mascara_tamanho_original)
-
-    def skeletonization_and_connect(self):
-
-
-        #skeletização
+        
         self.field_line_mask = cv2.bitwise_and(self.white_mask,self.mascara_tamanho_original)
-        kernel_tampa_buraco = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        self.mask_maciça = cv2.morphologyEx(self.field_line_mask, cv2.MORPH_CLOSE, kernel_tampa_buraco)
         self.mascara_relevo = cv2.GaussianBlur(self.field_line_mask,(31,31),0)
 
 
@@ -172,7 +170,70 @@ class Pixel_Segment:
 
 
     def debug(self):
-        pass
+        self.masks_and_resize()
+        self.binarization()
+        self.skeletonization_and_connect()
+
+        img_copy = self.img.copy()
+
+        dict_debug = {}
+        dict_debug['white_mask'] = self.white_mask
+        dict_debug['green_mask'] = self.green_mask
+        dict_debug['white_mask_resized'] = self.white_mask_resized
+        dict_debug['green_mask_resized'] = self.green_mask_resized
+        dict_debug['uniq_img_masks'] = self.uniq_img
+        dict_debug['borda_binaria'] = self.borda_binaria
+
+        raw_points = []
+        for x in range(self.grid_width):
+            real_x = x*8
+            real_y = int(self.y_gauss[x]*8)
+            raw_points.append([real_x,real_y])
+
+        pre_hull_points = np.array(raw_points,dtype=np.int32).reshape((-1,1,2))
+        cv2.polylines(img_copy,[pre_hull_points],isClosed=False,color=(0,0,255),thickness=2)
+
+        hull_points = self.hull * 8
+        cv2.polylines(img_copy,[hull_points], isClosed=True, color=(0, 255, 255), thickness=2)
+
+        dict_debug['img_edge'] = img_copy
+        dict_debug['lines_relevo'] = self.mascara_relevo
+        dict_debug['skeleton'] = self.skeleton_img
+
+        keys = list(dict_debug.keys())
+        index = 0
+
+        while True:
+            key = keys[index]
+            value = dict_debug[key]
+            if value.shape[0] != self.height or value.shape[1] != self.width:
+                img_resized = cv2.resize(
+                value,
+                (self.width, self.height),
+                interpolation=cv2.INTER_NEAREST
+                )
+            else:
+                img_resized = value.copy()
+
+            cv2.putText(img_resized, key, (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 1,
+                (255,255,255), 2)
+
+            cv2.imshow("debug", img_resized)
+            k = cv2.waitKey(0) & 0xFF
+
+            if k == ord('d'):  
+                index = (index + 1) % len(keys)
+
+            elif k == ord('a'):  
+                index = (index - 1) % len(keys)
+
+            elif k == ord('q'):  
+                break
+
+        cv2.destroyAllWindows()
+
+        
 
 
     def run(self):
@@ -190,4 +251,4 @@ class Pixel_Segment:
 source_lut  = 'green_pixels.csv'
 source = 'images/bitbots_reality_spl_only_131-16_02_2018__11_18_08_0117_upper_png_jpg_b0.8_s1.0_k0.jpg'
 obj = Pixel_Segment(source,source_lut)
-obj.run()
+obj.debug()
