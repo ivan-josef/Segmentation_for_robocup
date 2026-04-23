@@ -100,17 +100,13 @@ class Pixel_Segment:
             suavized_y = int(np.clip(self.y_gauss[x], 0, self.grid_height - 1))
             contour_points.append([x, suavized_y])
 
-        # Adicionar os cantos inferiores para fechar o polígono do campo
         contour_points.append([self.grid_width - 1, self.grid_height - 1]) 
         contour_points.append([0, self.grid_height - 1])                   
 
-        # Converter para o formato (N, 1, 2) int32 do OpenCV
         pontos_np = np.array(contour_points, dtype=np.int32).reshape((-1, 1, 2))
 
-        # Calcular o Casco Convexo sobre a borda suavizada
         self.hull = cv2.convexHull(pontos_np)
 
-        # Criar a máscara convexa final
         self.mascara_convexa = np.zeros((self.grid_height, self.grid_width), dtype=np.uint8)
         cv2.drawContours(self.mascara_convexa, [self.hull], -1, 255, thickness=cv2.FILLED)
             
@@ -249,6 +245,6 @@ class Pixel_Segment:
 
 
 source_lut  = 'green_pixels.csv'
-source = 'images/bitbots_reality_spl_only_131-16_02_2018__11_18_08_0117_upper_png_jpg_b0.8_s1.0_k0.jpg'
+source = 'images/image_2.png'
 obj = Pixel_Segment(source,source_lut)
 obj.debug()

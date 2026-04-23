@@ -10,4 +10,4 @@ print(f"Total de pixels antes: {len(df)}")
 print(f"Total de cores únicas: {len(df_unicos)}")
 
 # Se quiser, salva o resultado em um novo CSV limpo
-df_unicos.to_csv("pixel_verde_unicos.csv", index=False)
+df_unicos.to_csv("green_pixels.csv", index=False)
