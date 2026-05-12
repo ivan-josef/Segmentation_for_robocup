@@ -90,25 +90,51 @@ class Pixel_Segment:
         
 
         #filtragem e convexhull
+
         y_vals = np.array([item[0] for item in self.histogram], dtype=np.float32)
+
+        # suavização (igual você já fazia)
         y_median = medfilt(y_vals, kernel_size=3)
         self.y_gauss = gaussian_filter1d(y_median, sigma=1.0)
+
+        # garante limites válidos
+        y_vals = np.clip(self.y_gauss, 0, self.grid_height - 1).astype(np.float32)
+
+        mask = np.ones_like(y_vals, dtype=bool)
+
+        # filtro de convexidade local
+        for i in range(1, len(y_vals) - 1):
+            Lx, Ly = i - 1, y_vals[i - 1]
+            Px, Py = i, y_vals[i]
+            Rx, Ry = i + 1, y_vals[i + 1]
+
+            v = (Rx - Lx) * (Py - Ly) - (Px - Lx) * (Ry - Ly)
+
+            # remove pontos não convexos (placas, robôs, etc)
+            if v < 0:
+                mask[i] = False
+
+        # reconstrução do contorno filtrado
         contour_points = []
-
-
         for x in range(self.grid_width):
-            suavized_y = int(np.clip(self.y_gauss[x], 0, self.grid_height - 1))
-            contour_points.append([x, suavized_y])
+            if mask[x]:
+                y = int(y_vals[x])
+                contour_points.append([x, y])
 
-        contour_points.append([self.grid_width - 1, self.grid_height - 1]) 
-        contour_points.append([0, self.grid_height - 1])                   
+        # garante fechamento inferior
+        contour_points.append([self.grid_width - 1, self.grid_height - 1])
+        contour_points.append([0, self.grid_height - 1])
 
-        pontos_np = np.array(contour_points, dtype=np.int32).reshape((-1, 1, 2))
+        self.contour_points = np.array(contour_points, dtype=np.int32)
 
-        self.hull = cv2.convexHull(pontos_np)
-
+        # cria máscara preenchida
         self.mascara_convexa = np.zeros((self.grid_height, self.grid_width), dtype=np.uint8)
-        cv2.drawContours(self.mascara_convexa, [self.hull], -1, 255, thickness=cv2.FILLED)
+
+        cv2.fillPoly(
+            self.mascara_convexa,
+            [self.contour_points],
+            255
+        )
             
 
     
@@ -117,14 +143,10 @@ class Pixel_Segment:
 
         #skeletização
 
-        self.mascara_tamanho_original = cv2.resize(
-            self.mascara_convexa, 
-            (self.width, self.height), 
-            interpolation=cv2.INTER_NEAREST
-        ) 
+
         
-        self.field_line_mask = cv2.bitwise_and(self.white_mask,self.mascara_tamanho_original)
-        self.mascara_relevo = cv2.GaussianBlur(self.field_line_mask,(31,31),0)
+        self.field_line_mask = cv2.bitwise_and(self.white_mask_resized.astype(np.uint8),self.mascara_convexa)
+        self.mascara_relevo = cv2.GaussianBlur(self.field_line_mask,(5,5),0)
 
 
         
@@ -162,8 +184,6 @@ class Pixel_Segment:
         self.skeleton_img = np.where(skeleton,255,0).astype(np.uint8)
 
     
-        
-
 
     def debug(self):
         self.masks_and_resize()
@@ -189,7 +209,7 @@ class Pixel_Segment:
         pre_hull_points = np.array(raw_points,dtype=np.int32).reshape((-1,1,2))
         cv2.polylines(img_copy,[pre_hull_points],isClosed=False,color=(0,0,255),thickness=2)
 
-        hull_points = self.hull * 8
+        hull_points = self.contour_points * 8
         cv2.polylines(img_copy,[hull_points], isClosed=True, color=(0, 255, 255), thickness=2)
 
         dict_debug['img_edge'] = img_copy
@@ -245,6 +265,6 @@ class Pixel_Segment:
 
 
 source_lut  = 'green_pixels.csv'
-source = 'images/image_2.png'
+source = 'images/image_1.png'
 obj = Pixel_Segment(source,source_lut)
 obj.debug()
